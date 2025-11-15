@@ -5,6 +5,13 @@
 # Project type: Hypothesis-testing
 # Hypothesis: Within each region, BIN dissimilarity increases with geographic distance, and turnover dominates β-diversity (nestedness is minor).
 
+##Further additions by William Feinman. All credit to the original author, Yazan.
+##WF1 : Added section headers throughout for ease of navigation. Clarified description of code in a couple areas.
+##WF2: Added numeric checks before figures 1 and 2 to check code is working and flag if any esceptions/outliers slipped through.
+##WF3: Added a pie-chart model as an alterante way of representing FIgure 3 data in a more compact space.
+
+
+# 0) Setup-------  
 suppressPackageStartupMessages({
   library(tidyverse)
   library(vegan) # distances, Mantel, betadisper, adonis2
@@ -27,7 +34,7 @@ theme_paper <- theme_minimal(base_size = 12) +
 fig_dir <- "../figs"
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
-# 1) Data
+# 1) Data-------  
 data_path <- "../data/result.tsv"
 dfBOLD <- readr::read_tsv(data_path, show_col_types = FALSE)
 
@@ -40,6 +47,7 @@ dfBOLD <- dfBOLD %>%
   filter(!is.na(province_state), !country %in% c("NA", "Unrecoverable"))
 
 # setting regions
+##WF: This creates a reference dataframe to allow later entries to be sorted into either the Neararctic or Western Palearctic regions using their site listing.
 realm_by_site <- dfBOLD %>%
   filter(!is.na(realm)) %>%
   count(site_id, realm, name = "n_realm") %>%
@@ -54,7 +62,9 @@ realm_by_site <- dfBOLD %>%
   filter(!is.na(region)) %>%
   select(site_id, region)
 
-# 2) balancing sites
+
+# 2) balancing sites -------
+##WF: This function random samples a representative portion from the Near Arctic and Palearctic Sites, ensuring supplied data is clean, usuable, and split between both North America and the EU.
 build_with_threshold <- function(bin_threshold = 10) {
   site_stats <- dfBOLD %>%
     filter(!is.na(bin_uri)) %>%
@@ -64,6 +74,7 @@ build_with_threshold <- function(bin_threshold = 10) {
     inner_join(realm_by_site, by = "site_id") %>%
     filter(n_BINs >= bin_threshold) %>%
     select(site_id, region, n_BINs, records)
+
 
   # median calculation
   coords_candidates <- dfBOLD %>%
@@ -171,7 +182,7 @@ jac_dist <- built$jac_dist
 jac_mat <- built$jac_mat
 geo_mat <- built$geo_mat
 
-# 3) Figure 1 — Distance–decay within each region
+# 3) Figure 1 — Distance–decay within each region -------  
 sites_NA_sel <- site_meta$site_id[site_meta$region == "Nearctic"]
 sites_EU_sel <- site_meta$site_id[site_meta$region == "Western Palearctic"]
 
@@ -196,6 +207,17 @@ dd_df <- bind_rows(
   )
 ) %>% tidyr::drop_na(distance_km, jaccard)
 
+##WF:Added a sanity check for graph values.
+summary(dd_df$distance_km)
+summary(dd_df$jaccard)
+
+dd_df %>%
+  count (distance_km, region, sort = TRUE)
+
+dd_df %>%
+  count (jaccard, region, sort = TRUE)
+
+
 ggplot(dd_df, aes(distance_km, jaccard)) +
   geom_point(alpha = 0.35, size = 1.6) +
   geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
@@ -218,7 +240,7 @@ ggsave(file.path(fig_dir, "A_distance_decay.png"),
 # vegan::mantel — https://search.r-project.org/CRAN/refmans/vegan/html/mantel.html
 # geosphere::distHaversine — https://search.r-project.org/CRAN/refmans/geosphere/html/distHaversine.html
 
-# 4) Figure 2 — Jaccard
+# 4) Figure 2 — Jaccard -------  
 bp <- betapart::beta.pair(comm_pa, index.family = "jaccard")
 b_total <- as.matrix(bp$beta.jac) 
 b_turn <- as.matrix(bp$beta.jtu) 
@@ -253,6 +275,13 @@ df_beta <- bind_rows(
     region = factor(region, levels = c("Nearctic", "Western Palearctic"))
   )
 
+##WF:Added a sanity check for graph values.
+summary(df_beta$value)
+
+df_beta %>%
+  count (value, region, sort = TRUE)
+
+
 ggplot(df_beta, aes(region, value)) +
   geom_violin(fill = "grey95", color = "grey70", scale = "width", trim = TRUE) +
   geom_boxplot(width = 0.16, outlier.shape = NA) +
@@ -269,10 +298,12 @@ ggsave(file.path(fig_dir, "B_beta_partition.png"),
   width = 10, height = 4, dpi = 300
 )
 
+
+
 # Reference (outside course content):
 # betapart::beta.pair — https://search.r-project.org/CRAN/refmans/betapart/html/beta.pair.html
 
-# Figure 3: Unique vs shared BINs 
+# 5) Figure 3: Unique vs shared BINs -------  
 stopifnot(exists("comm_pa"), exists("site_meta"), exists("fig_dir"))
 dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
 
@@ -329,14 +360,18 @@ ggplot2::ggsave(file.path(fig_dir, "C_unique_shared_BINs.png"),
   
   width = 6.5, height = 4.8, dpi = 300
 )
-# References:
+
+##WF: added a pie chart for compact presentation.
+pie(df_bar$count, labels = paste (df_bar$group,': \n', df_bar$count, "BINs  "), col = gray(seq(0.5, 1.0, length.out = 6)), main = "Unique vs shared Bombus BINs by region")
+
+# References:# References:main = 
 # Base set ops: intersect(), union(), setdiff()
 #   https://stat.ethz.ch/R-manual/R-patched/library/base/html/sets.html
 # ggplot2 layers used here:
 #   geom_col / geom_text / annotate / coord_cartesian / theme_minimal
 #   https://ggplot2.tidyverse.org/reference/
 
-# 6) For Results and discussion
+# 6) For Results and discussion -------  
 cat("\n=== Balanced site summary ===\n")
 site_meta %>%
   count(region, name = "n_sites") %>%
@@ -345,3 +380,4 @@ cat(sprintf("Sites per region used (balanced): %d\n", S))
 cat(sprintf("Pairs per region (within): %d\n", S * (S - 1) / 2))
 cat(sprintf("Mantel (Nearctic): r=%.3f, p=%.3f\n", mantel_na$statistic, mantel_na$signif))
 cat(sprintf("Mantel (Western Palearctic): r=%.3f, p=%.3f\n", mantel_eu$statistic, mantel_eu$signif))
+
